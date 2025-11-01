@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escáner CURP</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f8f9fa; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .back-btn { background: #6c757d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .upload-area { border: 3px dashed #28a745; border-radius: 10px; padding: 40px; text-align: center; margin: 20px 0; cursor: pointer; transition: all 0.3s; }
+        .upload-area:hover { background: #f8fff9; border-color: #20c997; }
+        .upload-area.dragover { background: #e8f5e8; border-color: #198754; }
+        input[type="file"] { display: none; }
+        button { background: #28a745; color: white; padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin: 10px 5px; }
+        button:hover { background: #198754; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .result { margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #28a745; }
+        .error { border-left-color: #dc3545; background: #f8d7da; color: #721c24; }
+        .loading { display: none; color: #666; margin-top: 15px; }
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .data-table th, .data-table td { padding: 12px; text-align: left; border-bottom: 1px solid #dee2e6; }
+        .data-table th { background: #e9ecef; font-weight: bold; }
+        .file-info { background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📄 Escáner CURP</h1>
+        <a href="/" class="back-btn">← Volver al Menú</a>
+    </div>
+    
+    <div class="container">
+        <p>Sube una imagen o PDF de un documento CURP para extraer automáticamente la información</p>
+        
+        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <div style="font-size: 3em; margin-bottom: 15px;">📁</div>
+            <div style="font-size: 1.2em; margin-bottom: 10px;">Haz clic aquí o arrastra tu archivo</div>
+            <div style="color: #666;">Formatos soportados: JPG, PNG, PDF (máx. 16MB)</div>
+        </div>
+        
+        <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.pdf" onchange="handleFileSelect(event)">
+        
+        <div id="fileInfo" class="file-info" style="display: none;"></div>
+        
+        <button id="scanBtn" onclick="scanDocument()" disabled>🔍 Escanear Documento</button>
+        <button onclick="clearFile()">🗑️ Limpiar</button>
+        
+        <div class="loading" id="loading">🔄 Procesando documento...</div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+
+        // Drag and drop
+        const uploadArea = document.querySelector('.upload-area');
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+            
+            if (!validTypes.includes(file.type)) {
+                alert('Formato no válido. Use JPG, PNG o PDF');
+                return;
+            }
+            
+            if (file.size > 16 * 1024 * 1024) {
+                alert('El archivo es muy grande. Máximo 16MB');
+                return;
+            }
+            
+            selectedFile = file;
+            
+            document.getElementById('fileInfo').innerHTML = `
+                <strong>Archivo seleccionado:</strong><br>
+                📄 ${file.name}<br>
+                📊 ${(file.size / 1024 / 1024).toFixed(2)} MB<br>
+                🗂️ ${file.type}
+            `;
+            document.getElementById('fileInfo').style.display = 'block';
+            document.getElementById('scanBtn').disabled = false;
+        }
+
+        async function scanDocument() {
+            if (!selectedFile) {
+                alert('Selecciona un archivo primero');
+                return;
+            }
+            
+            const loadingDiv = document.getElementById('loading');
+            const resultDiv = document.getElementById('result');
+            
+            loadingDiv.style.display = 'block';
+            resultDiv.innerHTML = '';
+            
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            
+            try {
+                const response = await fetch('/scan_curp', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                loadingDiv.style.display = 'none';
+                
+                if (data.error) {
+                    resultDiv.innerHTML = `<div class="result error"><strong>Error:</strong> ${data.error}</div>`;
+                } else {
+                    const result = data.result;
+                    resultDiv.innerHTML = `
+                        <div class="result">
+                            <strong>📋 Información Extraída:</strong>
+                            <table class="data-table">
+                                <tr><th>Campo</th><th>Valor</th></tr>
+                                <tr><td>CURP</td><td>${result.curp || 'No detectado'}</td></tr>
+                                <tr><td>Nombre Completo</td><td>${result.nombre_completo || 'No detectado'}</td></tr>
+                                <tr><td>Nombres</td><td>${result.nombres || 'No detectado'}</td></tr>
+                                <tr><td>Apellido Paterno</td><td>${result.apellido_paterno || 'No detectado'}</td></tr>
+                                <tr><td>Apellido Materno</td><td>${result.apellido_materno || 'No detectado'}</td></tr>
+                                <tr><td>Sexo</td><td>${result.sexo || 'No detectado'}</td></tr>
+                                <tr><td>Fecha de Nacimiento</td><td>${result.fecha_nacimiento || 'No detectado'}</td></tr>
+                                <tr><td>Entidad de Nacimiento</td><td>${result.entidad_nacimiento || 'No detectado'}</td></tr>
+                                <tr><td>Código Verificador</td><td>${result.codigo_verificador || 'No detectado'}</td></tr>
+                                <tr><td>Total Partes</td><td>${result.total_partes || 'No detectado'}</td></tr>
+                                <tr><td>QRs Encontrados</td><td>${result.total_qrs_encontrados || 'No detectado'} (usando el primero)</td></tr>
+                                ${Object.keys(result).filter(key => key.startsWith('parte_')).map(key => `<tr><td>${key}</td><td>${result[key]}</td></tr>`).join('')}
+                                ${result.qr_completo ? `<tr><td colspan="2" style="background: #f8f9fa; font-family: monospace; font-size: 12px;"><strong>Contenido QR Completo:</strong><br>${result.qr_completo}</td></tr>` : ''}
+                            </table>
+                            ${result.nota ? `<div style="margin-top: 15px; color: #856404; background: #fff3cd; padding: 10px; border-radius: 5px;"><strong>Nota:</strong> ${result.nota}</div>` : ''}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                resultDiv.innerHTML = `<div class="result error"><strong>Error:</strong> ${error.message}</div>`;
+            }
+        }
+
+        function clearFile() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileInfo').style.display = 'none';
+            document.getElementById('scanBtn').disabled = true;
+            document.getElementById('result').innerHTML = '';
+        }
+    </script>
+</body>
+</html>

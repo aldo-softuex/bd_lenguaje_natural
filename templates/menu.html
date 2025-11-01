@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        .container { max-width: 800px; margin: 0 auto; padding: 50px 20px; text-align: center; }
+        h1 { color: white; font-size: 2.5em; margin-bottom: 50px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; margin-top: 40px; }
+        .menu-card { background: white; border-radius: 15px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); transition: transform 0.3s ease; cursor: pointer; }
+        .menu-card:hover { transform: translateY(-10px); }
+        .menu-icon { font-size: 4em; margin-bottom: 20px; }
+        .menu-title { font-size: 1.5em; font-weight: bold; margin-bottom: 15px; color: #333; }
+        .menu-description { color: #666; line-height: 1.6; }
+        .sql-card { border-left: 5px solid #007bff; }
+        .curp-card { border-left: 5px solid #28a745; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Sistema de Gestión Inteligente</h1>
+        
+        <div class="menu-grid">
+            <div class="menu-card sql-card" onclick="location.href='/sql'">
+                <div class="menu-icon">🤖</div>
+                <div class="menu-title">Agente SQL</div>
+                <div class="menu-description">
+                    Consulta la base de datos usando lenguaje natural. 
+                    Haz preguntas sobre tareas pendientes, usuarios y más.
+                </div>
+            </div>
+            
+            <div class="menu-card curp-card" onclick="location.href='/curp'">
+                <div class="menu-icon">📄</div>
+                <div class="menu-title">Escáner CURP</div>
+                <div class="menu-description">
+                    Sube imágenes o PDFs de documentos CURP para extraer 
+                    automáticamente la información personal.
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

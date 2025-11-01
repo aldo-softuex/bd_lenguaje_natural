@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agente SQL</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f8f9fa; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .back-btn { background: #6c757d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        textarea { width: 100%; height: 100px; margin: 10px 0; padding: 15px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 14px; }
+        button { background: #007bff; color: white; padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #0056b3; }
+        .result { margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #007bff; }
+        .error { border-left-color: #dc3545; background: #f8d7da; color: #721c24; }
+        .loading { display: none; color: #666; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 Agente SQL</h1>
+        <a href="/" class="back-btn">← Volver al Menú</a>
+    </div>
+    
+    <div class="container">
+        <p>Haz preguntas sobre la base de datos en lenguaje natural</p>
+        
+        <textarea id="question" placeholder="Ejemplo: ¿Cuántas tareas pendientes tiene MANUEL ALBERTO MARTINEZ SANCHEZ?"></textarea>
+        <br>
+        <button onclick="queryDatabase()">Consultar Base de Datos</button>
+        
+        <div class="loading" id="loading">🔄 Procesando consulta...</div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function queryDatabase() {
+            const question = document.getElementById('question').value;
+            const resultDiv = document.getElementById('result');
+            const loadingDiv = document.getElementById('loading');
+            
+            if (!question.trim()) {
+                alert('Por favor ingresa una pregunta');
+                return;
+            }
+            
+            loadingDiv.style.display = 'block';
+            resultDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch('/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question })
+                });
+                
+                const data = await response.json();
+                loadingDiv.style.display = 'none';
+                
+                if (data.error) {
+                    resultDiv.innerHTML = `<div class="result error"><strong>Error:</strong> ${data.error}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="result"><strong>Respuesta:</strong><br>${data.result}</div>`;
+                }
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                resultDiv.innerHTML = `<div class="result error"><strong>Error:</strong> ${error.message}</div>`;
+            }
+        }
+        
+        document.getElementById('question').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                queryDatabase();
+            }
+        });
+    </script>
+</body>
+</html>

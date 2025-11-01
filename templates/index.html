@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agente SQL</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .container { background: #f5f5f5; padding: 20px; border-radius: 8px; }
+        textarea { width: 100%; height: 100px; margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin-top: 20px; padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #007bff; }
+        .error { border-left-color: #dc3545; background: #f8d7da; }
+        .loading { display: none; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Agente SQL con LangChain</h1>
+        <p>Haz preguntas sobre la base de datos en lenguaje natural</p>
+        
+        <textarea id="question" placeholder="Ejemplo: ¿Cuántos posts hay en la base de datos?"></textarea>
+        <br>
+        <button onclick="queryDatabase()">Consultar</button>
+        
+        <div class="loading" id="loading">Procesando consulta...</div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function queryDatabase() {
+            const question = document.getElementById('question').value;
+            const resultDiv = document.getElementById('result');
+            const loadingDiv = document.getElementById('loading');
+            
+            if (!question.trim()) {
+                alert('Por favor ingresa una pregunta');
+                return;
+            }
+            
+            loadingDiv.style.display = 'block';
+            resultDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch('/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question })
+                });
+                
+                const data = await response.json();
+                loadingDiv.style.display = 'none';
+                
+                if (data.error) {
+                    resultDiv.innerHTML = `<div class="result error"><strong>Error:</strong> ${data.error}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="result"><strong>Respuesta:</strong><br>${data.result}</div>`;
+                }
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                resultDiv.innerHTML = `<div class="result error"><strong>Error:</strong> ${error.message}</div>`;
+            }
+        }
+        
+        document.getElementById('question').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                queryDatabase();
+            }
+        });
+    </script>
+</body>
+</html>

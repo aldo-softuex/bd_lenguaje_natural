@@ -1,0 +1,10 @@
+flask
+langchain-openai
+langchain-community
+mysql-connector-python
+sqlalchemy
+Pillow
+qreader
+PyMuPDF
+numpy
+python-dotenv
