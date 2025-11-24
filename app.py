@@ -12,6 +12,12 @@ import numpy as np
 import warnings
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
+import cv2
+import torch
+from doctr.io import DocumentFile
+from doctr.models import ocr_predictor
+from transformers import TrOCRProcessor, VisionEncoderDecoderModel, AutoTokenizer, AutoModelForTokenClassification
+import re
 
 # Cargar variables de entorno
 load_dotenv()
@@ -64,6 +70,26 @@ def init_sql_agent():
 
 agent = init_sql_agent()
 
+# Inicializar modelos para INE
+print("Cargando docTR...")
+doctr_model = ocr_predictor(
+    det_arch="db_resnet50",
+    reco_arch="crnn_vgg16_bn",
+    pretrained=True
+)
+
+print("Cargando TrOCR...")
+processor_trocr = TrOCRProcessor.from_pretrained("microsoft/trocr-small-printed", use_fast=False)
+trocr = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-small-printed")
+trocr.eval()
+
+print("Cargando modelo NER...")
+model_path = "./modelo_ner_final"
+tokenizer_ner = AutoTokenizer.from_pretrained(model_path)
+model_ner = AutoModelForTokenClassification.from_pretrained(model_path)
+id2label = model_ner.config.id2label
+label2id = model_ner.config.label2id
+
 @app.route('/')
 def index():
     return render_template('menu.html')
@@ -90,6 +116,145 @@ def query_database():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def ocr_hibrido(image_bgr):
+    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+    cv2.imwrite("temp_doc.png", cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR))
+    doc = DocumentFile.from_images(["temp_doc.png"])
+    detect_result = doctr_model(doc)
+    texto_final = []
+    page = detect_result.pages[0]
+    
+    for block in page.blocks:
+        for line in block.lines:
+            x_min = min(w.geometry[0][0] for w in line.words)
+            y_min = min(w.geometry[0][1] for w in line.words)
+            x_max = max(w.geometry[1][0] for w in line.words)
+            y_max = max(w.geometry[1][1] for w in line.words)
+            
+            h, w, _ = image_rgb.shape
+            xmin = int(x_min * w)
+            ymin = int(y_min * h)
+            xmax = int(x_max * w)
+            ymax = int(y_max * h)
+            
+            line_img = image_rgb[ymin:ymax, xmin:xmax]
+            if line_img.size == 0:
+                continue
+            
+            pil_img = Image.fromarray(line_img)
+            pixel_values = processor_trocr(images=pil_img, return_tensors="pt").pixel_values
+            generated_ids = trocr.generate(pixel_values)
+            text = processor_trocr.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            texto_final.append(text)
+    
+    return "\n".join(texto_final)
+
+def predecir_texto(texto):
+    tokens = texto.split()
+    inputs = tokenizer_ner(
+        tokens,
+        is_split_into_words=True,
+        return_tensors="pt",
+        truncation=True,
+        padding=True
+    )
+    
+    with torch.no_grad():
+        outputs = model_ner(**inputs)
+    
+    predictions = torch.argmax(outputs.logits, dim=2)
+    word_ids = inputs.word_ids(batch_index=0)
+    predicted_labels = []
+    previous_word_idx = None
+    
+    for i, word_idx in enumerate(word_ids):
+        if word_idx is None:
+            continue
+        if word_idx != previous_word_idx:
+            predicted_labels.append(id2label[predictions[0][i].item()])
+        previous_word_idx = word_idx
+    
+    resultado = []
+    for token, label in zip(tokens, predicted_labels):
+        resultado.append({
+            "token": token,
+            "etiqueta": label
+        })
+    
+    return resultado
+
+def extraer_entidades(texto):
+    predicciones = predecir_texto(texto)
+    entidades = {}
+    entidad_actual = None
+    tokens_entidad = []
+    
+    for pred in predicciones:
+        token = pred["token"]
+        label = pred["etiqueta"]
+        
+        if label.startswith("B-"):
+            if entidad_actual and tokens_entidad:
+                tipo = entidad_actual.replace("B-", "")
+                if tipo not in entidades:
+                    entidades[tipo] = []
+                entidades[tipo].append(" ".join(tokens_entidad))
+            
+            entidad_actual = label
+            tokens_entidad = [token]
+            
+        elif label.startswith("I-") and entidad_actual:
+            tokens_entidad.append(token)
+            
+        else:
+            if entidad_actual and tokens_entidad:
+                tipo = entidad_actual.replace("B-", "")
+                if tipo not in entidades:
+                    entidades[tipo] = []
+                entidades[tipo].append(" ".join(tokens_entidad))
+            
+            entidad_actual = None
+            tokens_entidad = []
+    
+    if entidad_actual and tokens_entidad:
+        tipo = entidad_actual.replace("B-", "")
+        if tipo not in entidades:
+            entidades[tipo] = []
+        entidades[tipo].append(" ".join(tokens_entidad))
+    
+    return entidades
+
+@app.route('/escanear_ine', methods=['POST'])
+def escanear_ine():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No se seleccionó archivo'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No se seleccionó archivo'}), 400
+        
+        file_data = file.read()
+        
+        # Procesar imagen directamente
+        image = Image.open(io.BytesIO(file_data))
+        image_bgr = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        
+        # Procesar con OCR híbrido
+        texto_extraido = ocr_hibrido(image_bgr)
+        
+        # Limpiar texto
+        texto_corrido = texto_extraido.replace('\n', ' ').strip()
+        texto_corrido = re.sub(r'\s+', ' ', texto_corrido)
+        
+        # Extraer entidades
+        entidades = extraer_entidades(texto_corrido)
+        
+        return jsonify(entidades)
+    
+    except Exception as e:
+        return jsonify({'error': f'Error procesando archivo: {str(e)}'}), 500
 
 @app.route('/scan_curp', methods=['POST'])
 def scan_curp():

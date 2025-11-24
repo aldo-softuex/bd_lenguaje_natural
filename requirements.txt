@@ -8,3 +8,8 @@ qreader
 PyMuPDF
 numpy
 python-dotenv
+opencv-python
+torch
+python-doctr[torch]
+transformers
+sentencepiece
