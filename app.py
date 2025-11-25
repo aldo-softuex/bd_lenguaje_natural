@@ -84,7 +84,7 @@ trocr = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-small-printed
 trocr.eval()
 
 print("Cargando modelo NER...")
-model_path = "./modelo_ner_final"
+model_path = "./modelo_ner_final_seccion"
 tokenizer_ner = AutoTokenizer.from_pretrained(model_path)
 model_ner = AutoModelForTokenClassification.from_pretrained(model_path)
 id2label = model_ner.config.id2label
